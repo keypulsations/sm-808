@@ -1,0 +1,123 @@
+#!/bin/bash
+
+read -p "Tempo in BPM (default 160): " tempo
+tempo=${tempo:-160}
+colorStart=$((320-tempo))
+
+read -p "Amplitude (default 0.5): " amplitude
+amplitude=${amplitude:-0.5}
+
+# surpress keyboard input
+stty -echo
+
+ms=$(echo "scale=3; 60 / $tempo / 4" | bc)
+
+declare -A beats
+declare -A drumkit=(
+  [kick]=audio/kicks/kick.wav
+  [snare]=audio/snares/snare.wav
+  [hihat]=audio/hihats/hihat.wav
+)
+
+kick=(
+  1000000000100000
+  1000000000000000
+  0000000000100000
+  1010000000100000
+  1010000000000000
+  1010000000110000
+  0011000000100000
+)
+
+snare=(
+  0000100000001000
+  0000000000001000
+  0000100000000000
+  0000100101001001
+  0000100101000010
+  0100100101000010
+  0100100101001010
+)
+
+hihat=(
+  1111011111110111
+  1111011010100111
+  1111011010100011
+  1111011010100010
+  1111011010100000
+  1010101010101010
+  1010011111001010
+)
+
+random() {
+  beats=(
+    [kick]=${kick[$RANDOM % ${#kick[@]}]}
+    [snare]=${snare[$RANDOM % ${#snare[@]}]}
+    [hihat]=${hihat[$RANDOM % ${#hihat[@]}]}
+  )
+}
+
+start() {
+  random && loop 1
+}
+
+# dry this up #####
+kickPlot() {
+  kickChar=$(echo -e '\u25F3')
+  kickPlot="${beats[kick]//1/$kickChar}"
+  kickPlot="${kickPlot//0/' '}"
+  echo " kick: ${kickPlot}"
+}
+
+hihatPlot() {
+  hihatChar=$(echo -e '\u25f2')
+  hihatPlot="${beats[hihat]//1/$hihatChar}"
+  hihatPlot="${hihatPlot//0/' '}"
+  echo "hihat: ${hihatPlot}"
+}
+
+snarePlot() {
+  snareChar=$(echo -e '\u25F1')
+  snarePlot="${beats[snare]//1/$snareChar}"
+  snarePlot="${snarePlot//0/' '}"
+  printf "snare: ${snarePlot}"
+}
+###################
+
+progress() {
+  beat=$1
+  echo -en "\e[48;5;$((beat+colorStart))m \e[0m"
+}
+
+loop() {
+  local loop=$1
+  [[ $loop -eq 0 ]] && return;
+  printf "\n"
+
+  kickPlot
+  hihatPlot
+  snarePlot
+
+  printf "\n"
+  printf "       "
+
+  # determine max length sequence
+  # from kick/hihat/snare for 15
+  for beat in `seq 0 15`; do
+
+    for kit in "${!beats[@]}"; do
+      [[ ${beats[$kit]:$beat:1} -eq 1 ]] && play -q -v $amplitude ${drumkit[$kit]} &
+    done
+
+    progress $beat
+    sleep $ms
+  done
+
+  printf "\n\n"
+  loop $(expr $loop - 1)
+}
+
+start
+
+# reenable keyboard input
+stty echo
