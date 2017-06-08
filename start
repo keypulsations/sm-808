@@ -12,12 +12,17 @@ stty -echo
 
 ms=$(echo "scale=3; 60 / $tempo / 4" | bc)
 
+kicksPath=(audio/kicks/*)
+snaresPath=(audio/snares/*)
+hihatsPath=(audio/hihats/*)
+
 declare -A beats
 declare -A drumkit=(
-  [kick]=audio/kicks/kick.wav
-  [snare]=audio/snares/snare.wav
-  [hihat]=audio/hihats/hihat.wav
+  [kick]=${kicksPath[$RANDOM % ${#kicksPath[@]}]}
+  [snare]=${snaresPath[$RANDOM % ${#snaresPath[@]}]}
+  [hihat]=${hihatsPath[$RANDOM % ${#hihatsPath[@]}]}
 )
+
 
 kick=(
   1000000000100000
@@ -106,7 +111,7 @@ loop() {
   for beat in `seq 0 15`; do
 
     for kit in "${!beats[@]}"; do
-      [[ ${beats[$kit]:$beat:1} -eq 1 ]] && play -q -v $amplitude ${drumkit[$kit]} &
+      [[ ${beats[$kit]:$beat:1} -eq 1 ]] && play -q -v $amplitude ${drumkit[$kit]} -V1 &
     done
 
     progress $beat
