@@ -7,9 +7,6 @@ colorStart=$((320-tempo))
 read -p "Amplitude (default 0.5): " amplitude
 amplitude=${amplitude:-0.5}
 
-# read -p "Number loops (default 1): " loopCount
-# loopCount=${loopCount:1}
-
 # surpress keyboard input
 stty -echo
 
@@ -21,12 +18,16 @@ kicksPath=(audio/kicks/*)
 snaresPath=(audio/snares/*)
 hihatsPath=(audio/hihats/*)
 
+kickAudioPath=${kicksPath[$RANDOM % ${#kicksPath[@]}]}
+snareAudioPath=${snaresPath[$RANDOM % ${#snaresPath[@]}]}
+hihatAudioPath=${hihatsPath[$RANDOM % ${#hihatsPath[@]}]}
+
 # define beats and drumkit
 declare -A beats
 declare -A drumkit=(
-  [kick]=${kicksPath[$RANDOM % ${#kicksPath[@]}]}
-  [snare]=${snaresPath[$RANDOM % ${#snaresPath[@]}]}
-  [hihat]=${hihatsPath[$RANDOM % ${#hihatsPath[@]}]}
+  [kick]=$kickAudioPath
+  [snare]=$snareAudioPath
+  [hihat]=$hihatAudioPath
 )
 
 # these are predefined (credit: renasboy/command-line-sequencer)
@@ -34,13 +35,13 @@ declare -A drumkit=(
 # TensorFlow/Magenta neural nets trained on specific kick/snare/hh
 # tracks from Splice
 kick=(
-  # 10000000001000001000000000100000
-  # 1000000000000000
-  # 0000000000100000
-  # 1010000000100000
+  10000000001000001000000000100000
+  10000000000000001000000000000000
+  00000000001000000000000000100000
+  10100000001000001010000000100000
   10100000000000001010000000000000
-  # 1010000000110000
-  # 0011000000100000
+  10100000001100001010000000110000
+  00110000001000000011000000100000
 )
 
 snare=(
@@ -63,7 +64,7 @@ hihat=(
   1010011111001010
 )
 
-random() {
+randomRhythm() {
   beats=(
     [kick]=${kick[$RANDOM % ${#kick[@]}]}
     [snare]=${snare[$RANDOM % ${#snare[@]}]}
@@ -72,38 +73,35 @@ random() {
 }
 
 start() {
-  random && loop 1
+  randomRhythm && playSequence
 }
 
-# dry this up #####
-kickPlot() {
-  kickChar=$(echo -e '\u25F3')
-  kickPlot="${beats[kick]//1/$kickChar}"
-  kickPlot="${kickPlot//0/' '}"
-  echo " kick: ${kickPlot}"
-}
+plot() {
+  kit=$1
 
-hihatPlot() {
-  hihatChar=$(echo -e '\u25f2')
-  hihatPlot="${beats[hihat]//1/$hihatChar}"
-  hihatPlot="${hihatPlot//0/' '}"
-  echo "hihat: ${hihatPlot}"
-}
+  if [ $kit == kick ]
+  then
+    char=$(echo -e '\u25F3')
+  elif [ $kit == hihat ]
+  then
+    char=$(echo -e '\u25F2')
+  elif [ $kit == snare ]
+  then
+    char=$(echo -e '\u25F1')
+  fi
 
-snarePlot() {
-  snareChar=$(echo -e '\u25F1')
-  snarePlot="${beats[snare]//1/$snareChar}"
-  snarePlot="${snarePlot//0/' '}"
-  printf "snare: ${snarePlot}"
+  plot="${beats[$kit]//1/$char}"
+  plot="${plot//0/' '}"
+  echo "${kit}: ${plot}"
 }
 ###################
 
 maxSteps() {
   numKickBeats="${#beats[kick]}"
-  numHihatBeats="${#beats[hihat]}"
   numSnareBeats="${#beats[snare]}"
+  numHihatBeats="${#beats[hihat]}"
 
-  stepLengths=($numKickBeats $numHihatBeats $numSnareBeats)
+  stepLengths=($numKickBeats $numSnareBeats $numHihatBeats)
   IFS=$'\n'
   echo "${stepLengths[*]}" | sort -nr | head -n1
 }
@@ -113,36 +111,40 @@ progress() {
   echo -en "\e[48;5;$((beat+colorStart))m \e[0m"
 }
 
-loop() {
-  local loop=$1
-  [[ $loop -eq 0 ]] && return;
-  printf "\n"
-
+normalizeSequences() {
   stps=$(maxSteps)
   steps="$(($stps - 1))"
 
   for kit in "${!beats[@]}"; do
     len="${#beats[$kit]}"
-    multiplier=$(expr $(maxSteps) / $len)
+    stepMultiplier=$(expr $(maxSteps) / $len)
     str=""
 
-    mult="$(($multiplier - 1))"
+    stepMult="$(($stepMultiplier - 1))"
 
-    for multiple in `seq 0 $mult`; do
+    for multiple in `seq 0 $stepMult`; do
       str+="${beats[$kit]}"
     done
 
     beats[$kit]=$str
   done
+}
 
-  kickPlot
-  hihatPlot
-  snarePlot
+plotSequences() {
+  plot kick
+  plot snare
+  plot hihat
+}
 
-  printf "\n"
-  printf "       "
+indentToFirstBeat() {
+  # NOTE this should be associated with the kit string of max length
+  # i.e. hihat or snare, so that the color progress bars are aligned
+  # with the beats/steps displayed in the terminal
+  progressIndent="      "
+  printf "${progressIndent}"
+}
 
-  # TODO: determine max length sequence from kick/hihat/snare for 15
+progressThroughSteps() {
   for beat in `seq 0 $steps`; do
     for kit in "${!beats[@]}"; do
       [[ ${beats[$kit]:$beat:1} -eq 1 ]] &&
@@ -152,12 +154,25 @@ loop() {
     progress $beat
     sleep $ms
   done
+}
 
+printAudioPaths() {
+  printf "\n"
+  printf "${kickAudioPath}\n"
+  printf "${snareAudioPath}\n"
+  printf "${hihatAudioPath}\n"
+  printf "\n"
+}
+
+playSequence() {
+  printAudioPaths
+  normalizeSequences
+  plotSequences
+  indentToFirstBeat
+  progressThroughSteps
   printf "\n\n"
-  loop $(expr $loop - 1)
 }
 
 start
 
-# reenable keyboard input
 stty echo
